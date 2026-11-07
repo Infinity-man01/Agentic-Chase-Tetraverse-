@@ -62,14 +62,36 @@ Meeting-to-Action-Bot/
 
 ## 🚀 Implementation Status
 
-- [ ] Telegram bot setup
-- [ ] n8n workflow configuration
-- [ ] AI-based transcript analysis
-- [ ] Structured action item extraction
-- [ ] Google Sheets integration
-- [ ] Telegram summary generation
-- [ ] Missing information and error handling
+- [x] Telegram bot setup (bot credential configured)
+- [x] n8n workflow configuration — Phases 1–2 (text and `.txt` intake)
+- [ ] AI-based transcript analysis (Phase 3)
+- [ ] Structured action item extraction (Phase 3)
+- [ ] Google Sheets integration (Phase 4)
+- [ ] Telegram summary generation (Phase 5)
+- [ ] Missing information and error handling (input-side done; extraction-side pending)
 - [ ] End-to-end testing
+
+## 📦 Current Build (Phases 1–2)
+
+**Workflow:** `Rasamalai - Meeting-to-Action MVP` — **inactive, not published**
+
+Built in n8n 2.46.4, timezone `Asia/Kolkata`.
+
+- Telegram Trigger accepts messages and `.txt` documents.
+- Every input is normalized to one transcript contract:
+  `chat_id`, `user_id`, `message_id`, `source_type` (`text` | `txt`), `transcript`, `meeting_timestamp`.
+- Plain text and `.txt` uploads converge on the same `Transcript Processing` placeholder — the Phase 3 AI insertion point.
+- Rejections and failures are handled deterministically with Telegram replies:
+  empty message, unsupported media, bot commands, too-short text, non-`.txt` file,
+  download failure, unreadable or empty extracted text.
+- No AI and no Google Sheets yet, by design.
+
+Exported workflow: [`workflows/meeting-to-action.json`](workflows/meeting-to-action.json)
+(credential references removed before publishing).
+
+- Architecture and data contract: [`docs/architecture.md`](docs/architecture.md)
+- Node reference, validation log and test steps: [`docs/workflow.md`](docs/workflow.md)
+- Test input: [`samples/sample-transcript.txt`](samples/sample-transcript.txt)
 
 ## 🧪 Expected Output
 

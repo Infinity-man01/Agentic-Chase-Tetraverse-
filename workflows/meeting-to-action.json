@@ -1,0 +1,684 @@
+﻿{
+    "updatedAt":  "2026-11-07T03:06:55.300Z",
+    "createdAt":  "2026-11-07T02:34:01.611Z",
+    "id":  "ebk0jMAStBUcYLa8",
+    "name":  "Rasamalai - Meeting-to-Action MVP",
+    "description":  "Phase 1: Telegram intake, message normalization, message type detection, transcript validation and rejection replies.",
+    "active":  false,
+    "isArchived":  false,
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "updates":  [
+                                                         "message"
+                                                     ],
+                                         "additionalFields":  {
+
+                                                              }
+                                     },
+                      "id":  "c4284a63-731a-4e74-b761-ea6d2756d389",
+                      "name":  "Telegram Trigger",
+                      "type":  "n8n-nodes-base.telegramTrigger",
+                      "typeVersion":  1.5,
+                      "position":  [
+                                       0,
+                                       0
+                                   ],
+                      "webhookId":  "0e09b82a-6ce2-4f5e-9c9c-5ceaf0e7d472"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "\nconst items = $input.all();\nconst normalized = [];\nfor (const item of items) {\n  const update = item.json || {};\n  const message = update.message || update.edited_message || update.channel_post || {};\n  const chat = message.chat || {};\n  const from = message.from || {};\n  const document = message.document || null;\n  const rawText = typeof message.text === \u0027string\u0027 ? message.text : \u0027\u0027;\n  const trimmedText = rawText.trim();\n  const messageDate = typeof message.date === \u0027number\u0027 ? new Date(message.date * 1000) : new Date();\n  const attachmentKeys = [\u0027photo\u0027, \u0027audio\u0027, \u0027video\u0027, \u0027voice\u0027, \u0027video_note\u0027, \u0027animation\u0027, \u0027sticker\u0027, \u0027location\u0027, \u0027venue\u0027, \u0027contact\u0027, \u0027poll\u0027, \u0027dice\u0027];\n  let hasOtherAttachment = false;\n  for (const key of attachmentKeys) {\n    if (message[key]) {\n      hasOtherAttachment = true;\n    }\n  }\n  normalized.push({\n    json: {\n      update_id: update.update_id !== undefined ? update.update_id : null,\n      chat_id: chat.id !== undefined ? chat.id : null,\n      chat_type: chat.type || \u0027\u0027,\n      chat_title: chat.title || \u0027\u0027,\n      user_id: from.id !== undefined ? from.id : null,\n      username: from.username || \u0027\u0027,\n      first_name: from.first_name || \u0027\u0027,\n      message_id: message.message_id !== undefined ? message.message_id : null,\n      timestamp: messageDate.toISOString(),\n      message_text: rawText,\n      document_file_id: document \u0026\u0026 document.file_id ? document.file_id : \u0027\u0027,\n      document_file_name: document \u0026\u0026 document.file_name ? document.file_name : \u0027\u0027,\n      document_mime_type: document \u0026\u0026 document.mime_type ? document.mime_type : \u0027\u0027,\n      has_text: trimmedText.length \u003e 0,\n      has_document: Boolean(document),\n      has_other_attachment: hasOtherAttachment,\n      is_bot_command: /^[/][A-Za-z0-9_]+/.test(trimmedText)\n    }\n  });\n}\nreturn normalized;\n"
+                                     },
+                      "id":  "2e3aa64a-b5bb-43d6-bacc-c6cd32b46d36",
+                      "name":  "Normalize Telegram Update",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       240,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "\nconst items = $input.all();\nconst detected = [];\nfor (const item of items) {\n  const data = item.json || {};\n  const fileName = data.document_file_name || \u0027\u0027;\n  const mimeType = data.document_mime_type || \u0027\u0027;\n  const extensionMatch = /[.]([A-Za-z0-9]+)$/.exec(fileName);\n  const documentExtension = extensionMatch ? extensionMatch[1].toLowerCase() : \u0027\u0027;\n  let messageKind = \u0027empty\u0027;\n  if (data.has_document === true) {\n    messageKind = \u0027document\u0027;\n  } else if (data.has_text === true) {\n    messageKind = \u0027text\u0027;\n  } else if (data.has_other_attachment === true) {\n    messageKind = \u0027unsupported\u0027;\n  }\n  let documentKind = \u0027none\u0027;\n  if (messageKind === \u0027document\u0027) {\n    const looksLikeTxt = mimeType === \u0027text/plain\u0027 || documentExtension === \u0027txt\u0027;\n    documentKind = looksLikeTxt ? \u0027txt\u0027 : \u0027other\u0027;\n  }\n  detected.push({\n    json: Object.assign({}, data, {\n      message_kind: messageKind,\n      document_kind: documentKind,\n      document_extension: documentExtension\n    })\n  });\n}\nreturn detected;\n"
+                                     },
+                      "id":  "84a8bcf1-56e5-4ef0-879c-4a44afd3b2ab",
+                      "name":  "Message Type Detection",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       480,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "\nconst MIN_TRANSCRIPT_LENGTH = 30;\nconst items = $input.all();\nconst validated = [];\nfor (const item of items) {\n  const data = item.json || {};\n  const rawText = typeof data.message_text === \u0027string\u0027 ? data.message_text : \u0027\u0027;\n  const text = rawText.trim();\n  let status = \u0027invalid\u0027;\n  let reason = \u0027\u0027;\n  let message = \u0027\u0027;\n  if (data.message_kind === \u0027document\u0027) {\n    status = \u0027document\u0027;\n    reason = \u0027document_received\u0027;\n    message = \u0027Document received.\u0027;\n  } else if (data.message_kind === \u0027empty\u0027) {\n    status = \u0027empty\u0027;\n    reason = \u0027empty_message\u0027;\n    message = \u0027I received an empty message. Please send the meeting transcript as text.\u0027;\n  } else if (data.message_kind === \u0027unsupported\u0027) {\n    status = \u0027unsupported\u0027;\n    reason = \u0027unsupported_message_type\u0027;\n    message = \u0027I can only work with text transcripts. Please send the transcript as a text message or a .txt file.\u0027;\n  } else if (data.is_bot_command === true) {\n    status = \u0027invalid\u0027;\n    reason = \u0027bot_command\u0027;\n    message = \u0027That looks like a bot command. Please send the meeting transcript itself as a text message or a .txt file.\u0027;\n  } else if (text.length === 0) {\n    status = \u0027empty\u0027;\n    reason = \u0027empty_message\u0027;\n    message = \u0027I received an empty message. Please send the meeting transcript as text.\u0027;\n  } else if (text.length \u003c MIN_TRANSCRIPT_LENGTH) {\n    status = \u0027invalid\u0027;\n    reason = \u0027insufficient_content\u0027;\n    message = \u0027That message is too short to be a meeting transcript. Please send the full transcript.\u0027;\n  } else {\n    status = \u0027ready\u0027;\n    reason = \u0027ok\u0027;\n    message = \u0027Transcript accepted.\u0027;\n  }\n  validated.push({\n    json: Object.assign({}, data, {\n      transcript_status: status,\n      validation_reason: reason,\n      validation_message: message,\n      transcript_text: status === \u0027ready\u0027 ? text : \u0027\u0027,\n      transcript_char_count: text.length,\n      transcript_word_count: text.split(/\\s+/).filter(Boolean).length\n    })\n  });\n}\nreturn validated;\n"
+                                     },
+                      "id":  "8ccb4c97-f7ce-4777-a29b-3188bb430782",
+                      "name":  "Transcript Validation",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       720,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "rules":  {
+                                                       "values":  [
+                                                                      {
+                                                                          "conditions":  {
+                                                                                             "options":  {
+                                                                                                             "caseSensitive":  true,
+                                                                                                             "leftValue":  "",
+                                                                                                             "typeValidation":  "strict",
+                                                                                                             "version":  1
+                                                                                                         },
+                                                                                             "conditions":  [
+                                                                                                                {
+                                                                                                                    "leftValue":  "={{ $json.transcript_status }}",
+                                                                                                                    "operator":  {
+                                                                                                                                     "type":  "string",
+                                                                                                                                     "operation":  "equals"
+                                                                                                                                 },
+                                                                                                                    "rightValue":  "ready"
+                                                                                                                }
+                                                                                                            ],
+                                                                                             "combinator":  "and"
+                                                                                         },
+                                                                          "renameOutput":  true,
+                                                                          "outputKey":  "Ready"
+                                                                      },
+                                                                      {
+                                                                          "conditions":  {
+                                                                                             "options":  {
+                                                                                                             "caseSensitive":  true,
+                                                                                                             "leftValue":  "",
+                                                                                                             "typeValidation":  "strict",
+                                                                                                             "version":  1
+                                                                                                         },
+                                                                                             "conditions":  [
+                                                                                                                {
+                                                                                                                    "leftValue":  "={{ $json.transcript_status }}",
+                                                                                                                    "operator":  {
+                                                                                                                                     "type":  "string",
+                                                                                                                                     "operation":  "equals"
+                                                                                                                                 },
+                                                                                                                    "rightValue":  "document"
+                                                                                                                }
+                                                                                                            ],
+                                                                                             "combinator":  "and"
+                                                                                         },
+                                                                          "renameOutput":  true,
+                                                                          "outputKey":  "Document"
+                                                                      },
+                                                                      {
+                                                                          "conditions":  {
+                                                                                             "options":  {
+                                                                                                             "caseSensitive":  true,
+                                                                                                             "leftValue":  "",
+                                                                                                             "typeValidation":  "strict",
+                                                                                                             "version":  1
+                                                                                                         },
+                                                                                             "conditions":  [
+                                                                                                                {
+                                                                                                                    "leftValue":  "={{ $json.transcript_status }}",
+                                                                                                                    "operator":  {
+                                                                                                                                     "type":  "string",
+                                                                                                                                     "operation":  "equals"
+                                                                                                                                 },
+                                                                                                                    "rightValue":  "empty"
+                                                                                                                }
+                                                                                                            ],
+                                                                                             "combinator":  "and"
+                                                                                         },
+                                                                          "renameOutput":  true,
+                                                                          "outputKey":  "Empty Message"
+                                                                      },
+                                                                      {
+                                                                          "conditions":  {
+                                                                                             "options":  {
+                                                                                                             "caseSensitive":  true,
+                                                                                                             "leftValue":  "",
+                                                                                                             "typeValidation":  "strict",
+                                                                                                             "version":  1
+                                                                                                         },
+                                                                                             "conditions":  [
+                                                                                                                {
+                                                                                                                    "leftValue":  "={{ $json.transcript_status }}",
+                                                                                                                    "operator":  {
+                                                                                                                                     "type":  "string",
+                                                                                                                                     "operation":  "equals"
+                                                                                                                                 },
+                                                                                                                    "rightValue":  "unsupported"
+                                                                                                                }
+                                                                                                            ],
+                                                                                             "combinator":  "and"
+                                                                                         },
+                                                                          "renameOutput":  true,
+                                                                          "outputKey":  "Unsupported"
+                                                                      }
+                                                                  ]
+                                                   },
+                                         "options":  {
+                                                         "fallbackOutput":  "extra",
+                                                         "renameFallbackOutput":  "Invalid Input"
+                                                     }
+                                     },
+                      "id":  "948d46ac-e0e4-43ff-9310-eab5e6b19cdc",
+                      "name":  "Route by Transcript Status",
+                      "type":  "n8n-nodes-base.switch",
+                      "typeVersion":  3.5,
+                      "position":  [
+                                       960,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+
+                                     },
+                      "id":  "24ce2096-b353-431f-9e42-01a98581e45f",
+                      "name":  "Transcript Processing (Placeholder)",
+                      "type":  "n8n-nodes-base.noOp",
+                      "typeVersion":  1,
+                      "position":  [
+                                       2400,
+                                       -224
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "chatId":  "={{ $json.chat_id }}",
+                                         "text":  "={{ $json.validation_message }}",
+                                         "additionalFields":  {
+                                                                  "appendAttribution":  false,
+                                                                  "parse_mode":  "HTML",
+                                                                  "reply_to_message_id":  "={{ $json.message_id }}"
+                                                              }
+                                     },
+                      "id":  "e102361b-d1ed-4b67-b34b-5bbadb6f67a2",
+                      "name":  "Send Empty Message Reply",
+                      "type":  "n8n-nodes-base.telegram",
+                      "typeVersion":  1.2,
+                      "position":  [
+                                       1200,
+                                       48
+                                   ],
+                      "webhookId":  "93b0e7e9-99d5-45b7-a4fb-16c2c50dbb39"
+                  },
+                  {
+                      "parameters":  {
+                                         "chatId":  "={{ $json.chat_id }}",
+                                         "text":  "={{ $json.validation_message }}",
+                                         "additionalFields":  {
+                                                                  "appendAttribution":  false,
+                                                                  "parse_mode":  "HTML",
+                                                                  "reply_to_message_id":  "={{ $json.message_id }}"
+                                                              }
+                                     },
+                      "id":  "6f7da620-6f08-4247-b0dd-b6ee0dbb3ed6",
+                      "name":  "Send Unsupported Message Reply",
+                      "type":  "n8n-nodes-base.telegram",
+                      "typeVersion":  1.2,
+                      "position":  [
+                                       1200,
+                                       208
+                                   ],
+                      "webhookId":  "72edbb0b-beaf-4a29-a67c-702c9cafbba4"
+                  },
+                  {
+                      "parameters":  {
+                                         "chatId":  "={{ $json.chat_id }}",
+                                         "text":  "={{ $json.validation_message }}",
+                                         "additionalFields":  {
+                                                                  "appendAttribution":  false,
+                                                                  "parse_mode":  "HTML",
+                                                                  "reply_to_message_id":  "={{ $json.message_id }}"
+                                                              }
+                                     },
+                      "id":  "f9cc5474-f481-4c6c-a40f-23d8215bf785",
+                      "name":  "Send Invalid Input Reply",
+                      "type":  "n8n-nodes-base.telegram",
+                      "typeVersion":  1.2,
+                      "position":  [
+                                       1200,
+                                       368
+                                   ],
+                      "webhookId":  "4a4c58b6-a417-416e-9ead-7f454442ca14"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "\nconst items = $input.all();\nconst built = [];\nfor (const item of items) {\n  const data = item.json || {};\n  built.push({\n    json: {\n      chat_id: data.chat_id !== undefined ? data.chat_id : null,\n      user_id: data.user_id !== undefined ? data.user_id : null,\n      message_id: data.message_id !== undefined ? data.message_id : null,\n      source_type: \u0027text\u0027,\n      transcript: typeof data.transcript_text === \u0027string\u0027 ? data.transcript_text : \u0027\u0027,\n      meeting_timestamp: data.timestamp || \u0027\u0027\n    }\n  });\n}\nreturn built;\n"
+                                     },
+                      "id":  "71917f64-8ff9-4e01-a1a1-7f4f3c07f4fa",
+                      "name":  "Build Text Transcript Payload",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       1200,
+                                       -288
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "options":  {
+                                                                            "caseSensitive":  false,
+                                                                            "leftValue":  "",
+                                                                            "typeValidation":  "strict",
+                                                                            "version":  1
+                                                                        },
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "leftValue":  "={{ $json.document_extension }}",
+                                                                                   "operator":  {
+                                                                                                    "type":  "string",
+                                                                                                    "operation":  "equals"
+                                                                                                },
+                                                                                   "rightValue":  "txt"
+                                                                               },
+                                                                               {
+                                                                                   "leftValue":  "={{ $json.document_file_id }}",
+                                                                                   "operator":  {
+                                                                                                    "type":  "string",
+                                                                                                    "operation":  "notEmpty"
+                                                                                                },
+                                                                                   "rightValue":  ""
+                                                                               }
+                                                                           ],
+                                                            "combinator":  "and"
+                                                        },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "d8651157-045f-44d7-9404-7a4b0ec79cad",
+                      "name":  "Is Supported TXT File?",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2.4,
+                      "position":  [
+                                       1200,
+                                       -64
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "resource":  "file",
+                                         "fileId":  "={{ $json.document_file_id }}",
+                                         "additionalFields":  {
+
+                                                              }
+                                     },
+                      "id":  "06621cce-13ab-478f-a150-253af403bf70",
+                      "name":  "Telegram Get File",
+                      "type":  "n8n-nodes-base.telegram",
+                      "typeVersion":  1.2,
+                      "position":  [
+                                       1440,
+                                       -64
+                                   ],
+                      "webhookId":  "5e1438b9-c14e-40b2-a000-cc8e7d1b4ddd",
+                      "onError":  "continueErrorOutput"
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "text",
+                                         "destinationKey":  "transcript",
+                                         "options":  {
+                                                         "keepSource":  "json"
+                                                     }
+                                     },
+                      "id":  "42ef089f-d861-49dd-9349-d328191f0073",
+                      "name":  "Extract Text From TXT",
+                      "type":  "n8n-nodes-base.extractFromFile",
+                      "typeVersion":  1.2,
+                      "position":  [
+                                       1680,
+                                       -64
+                                   ],
+                      "onError":  "continueErrorOutput"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "\nconst meta = $(\u0027Transcript Validation\u0027).item.json;\nconst items = $input.all();\nconst built = [];\nfor (const item of items) {\n  const data = item.json || {};\n  built.push({\n    json: {\n      chat_id: meta.chat_id !== undefined ? meta.chat_id : null,\n      user_id: meta.user_id !== undefined ? meta.user_id : null,\n      message_id: meta.message_id !== undefined ? meta.message_id : null,\n      source_type: \u0027txt\u0027,\n      transcript: typeof data.transcript === \u0027string\u0027 ? data.transcript.trim() : \u0027\u0027,\n      meeting_timestamp: meta.timestamp || \u0027\u0027\n    }\n  });\n}\nreturn built;\n"
+                                     },
+                      "id":  "defdd1f0-8e67-4743-938f-68ee6c9e843b",
+                      "name":  "Build TXT Transcript Payload",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       1920,
+                                       -64
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "options":  {
+                                                                            "caseSensitive":  true,
+                                                                            "leftValue":  "",
+                                                                            "typeValidation":  "strict",
+                                                                            "version":  1
+                                                                        },
+                                                            "conditions":  [
+                                                                               {
+                                                                                   "leftValue":  "={{ ($json.transcript || \"\").trim().length }}",
+                                                                                   "operator":  {
+                                                                                                    "type":  "number",
+                                                                                                    "operation":  "gte"
+                                                                                                },
+                                                                                   "rightValue":  30
+                                                                               }
+                                                                           ],
+                                                            "combinator":  "and"
+                                                        },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "08683e00-a3fa-4e95-995b-6cd2344c4f9e",
+                      "name":  "Is TXT Transcript Usable?",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  2.4,
+                      "position":  [
+                                       2160,
+                                       -64
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "chatId":  "={{ $(\u0027Transcript Validation\u0027).first().json.chat_id }}",
+                                         "text":  "Only .txt transcript files are supported. Please upload a .txt file or paste the transcript as a text message.",
+                                         "additionalFields":  {
+                                                                  "appendAttribution":  false,
+                                                                  "parse_mode":  "HTML",
+                                                                  "reply_to_message_id":  "={{ $(\u0027Transcript Validation\u0027).first().json.message_id }}"
+                                                              }
+                                     },
+                      "id":  "99737cf8-fa9c-42f5-9753-0f8f03557782",
+                      "name":  "Send Unsupported File Reply",
+                      "type":  "n8n-nodes-base.telegram",
+                      "typeVersion":  1.2,
+                      "position":  [
+                                       1440,
+                                       144
+                                   ],
+                      "webhookId":  "027fdce4-548c-4a25-bc07-b52e954c664e"
+                  },
+                  {
+                      "parameters":  {
+                                         "chatId":  "={{ $(\u0027Transcript Validation\u0027).first().json.chat_id }}",
+                                         "text":  "I could not download that file from Telegram. Please try uploading it again, or paste the transcript as a text message.",
+                                         "additionalFields":  {
+                                                                  "appendAttribution":  false,
+                                                                  "parse_mode":  "HTML",
+                                                                  "reply_to_message_id":  "={{ $(\u0027Transcript Validation\u0027).first().json.message_id }}"
+                                                              }
+                                     },
+                      "id":  "efaf49d3-5f79-4297-84ce-816e10d3f35d",
+                      "name":  "Send Download Failed Reply",
+                      "type":  "n8n-nodes-base.telegram",
+                      "typeVersion":  1.2,
+                      "position":  [
+                                       1680,
+                                       224
+                                   ],
+                      "webhookId":  "1d18e745-dec8-43d7-9360-16e59970c847"
+                  },
+                  {
+                      "parameters":  {
+                                         "chatId":  "={{ $(\u0027Transcript Validation\u0027).first().json.chat_id }}",
+                                         "text":  "I could not read any transcript text from that file. Please check the .txt file and upload it again, or paste the transcript as a text message.",
+                                         "additionalFields":  {
+                                                                  "appendAttribution":  false,
+                                                                  "parse_mode":  "HTML",
+                                                                  "reply_to_message_id":  "={{ $(\u0027Transcript Validation\u0027).first().json.message_id }}"
+                                                              }
+                                     },
+                      "id":  "14a64db6-086a-4bb3-ae69-3ba14aae70ea",
+                      "name":  "Send Unreadable File Reply",
+                      "type":  "n8n-nodes-base.telegram",
+                      "typeVersion":  1.2,
+                      "position":  [
+                                       2400,
+                                       48
+                                   ],
+                      "webhookId":  "1a313302-79fe-454a-bc40-f3c74f7d5c74"
+                  }
+              ],
+    "connections":  {
+                        "Telegram Trigger":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Normalize Telegram Update",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "Normalize Telegram Update":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "Message Type Detection",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      },
+                        "Message Type Detection":  {
+                                                       "main":  [
+                                                                    [
+                                                                        {
+                                                                            "node":  "Transcript Validation",
+                                                                            "type":  "main",
+                                                                            "index":  0
+                                                                        }
+                                                                    ]
+                                                                ]
+                                                   },
+                        "Transcript Validation":  {
+                                                      "main":  [
+                                                                   [
+                                                                       {
+                                                                           "node":  "Route by Transcript Status",
+                                                                           "type":  "main",
+                                                                           "index":  0
+                                                                       }
+                                                                   ]
+                                                               ]
+                                                  },
+                        "Route by Transcript Status":  {
+                                                           "main":  [
+                                                                        [
+                                                                            {
+                                                                                "node":  "Build Text Transcript Payload",
+                                                                                "type":  "main",
+                                                                                "index":  0
+                                                                            }
+                                                                        ],
+                                                                        [
+                                                                            {
+                                                                                "node":  "Is Supported TXT File?",
+                                                                                "type":  "main",
+                                                                                "index":  0
+                                                                            }
+                                                                        ],
+                                                                        [
+                                                                            {
+                                                                                "node":  "Send Empty Message Reply",
+                                                                                "type":  "main",
+                                                                                "index":  0
+                                                                            }
+                                                                        ],
+                                                                        [
+                                                                            {
+                                                                                "node":  "Send Unsupported Message Reply",
+                                                                                "type":  "main",
+                                                                                "index":  0
+                                                                            }
+                                                                        ],
+                                                                        [
+                                                                            {
+                                                                                "node":  "Send Invalid Input Reply",
+                                                                                "type":  "main",
+                                                                                "index":  0
+                                                                            }
+                                                                        ]
+                                                                    ]
+                                                       },
+                        "Build Text Transcript Payload":  {
+                                                              "main":  [
+                                                                           [
+                                                                               {
+                                                                                   "node":  "Transcript Processing (Placeholder)",
+                                                                                   "type":  "main",
+                                                                                   "index":  0
+                                                                               }
+                                                                           ]
+                                                                       ]
+                                                          },
+                        "Is Supported TXT File?":  {
+                                                       "main":  [
+                                                                    [
+                                                                        {
+                                                                            "node":  "Telegram Get File",
+                                                                            "type":  "main",
+                                                                            "index":  0
+                                                                        }
+                                                                    ],
+                                                                    [
+                                                                        {
+                                                                            "node":  "Send Unsupported File Reply",
+                                                                            "type":  "main",
+                                                                            "index":  0
+                                                                        }
+                                                                    ]
+                                                                ]
+                                                   },
+                        "Telegram Get File":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "Extract Text From TXT",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ],
+                                                               [
+                                                                   {
+                                                                       "node":  "Send Download Failed Reply",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ]
+                                                           ]
+                                              },
+                        "Extract Text From TXT":  {
+                                                      "main":  [
+                                                                   [
+                                                                       {
+                                                                           "node":  "Build TXT Transcript Payload",
+                                                                           "type":  "main",
+                                                                           "index":  0
+                                                                       }
+                                                                   ],
+                                                                   [
+                                                                       {
+                                                                           "node":  "Send Unreadable File Reply",
+                                                                           "type":  "main",
+                                                                           "index":  0
+                                                                       }
+                                                                   ]
+                                                               ]
+                                                  },
+                        "Build TXT Transcript Payload":  {
+                                                             "main":  [
+                                                                          [
+                                                                              {
+                                                                                  "node":  "Is TXT Transcript Usable?",
+                                                                                  "type":  "main",
+                                                                                  "index":  0
+                                                                              }
+                                                                          ]
+                                                                      ]
+                                                         },
+                        "Is TXT Transcript Usable?":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "Transcript Processing (Placeholder)",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ],
+                                                                       [
+                                                                           {
+                                                                               "node":  "Send Unreadable File Reply",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1",
+                     "availableInMCP":  true,
+                     "timezone":  "Asia/Kolkata",
+                     "binaryMode":  "separate"
+                 },
+    "staticData":  null,
+    "meta":  {
+                 "aiBuilderAssisted":  true,
+                 "builderVariant":  "mcp",
+                 "templateCredsSetupCompleted":  true
+             },
+    "nodeGroups":  [
+
+                   ],
+    "pinData":  {
+
+                },
+    "versionId":  "ae9dd9b7-a70f-4c50-ab3b-a8a00b2dcadb",
+    "activeVersionId":  null,
+    "versionCounter":  10,
+    "triggerCount":  0,
+    "sourceWorkflowId":  null,
+    "tags":  [
+
+             ],
+    "shared":  [
+                   {
+                       "updatedAt":  "2026-11-07T02:34:01.628Z",
+                       "createdAt":  "2026-11-07T02:34:01.628Z",
+                       "role":  "workflow:owner",
+                       "workflowId":  "ebk0jMAStBUcYLa8",
+                       "projectId":  "uPP0DIklOhZjGks3",
+                       "project":  {
+                                       "updatedAt":  "2026-11-03T18:12:07.967Z",
+                                       "createdAt":  "2026-11-03T18:10:52.826Z",
+                                       "id":  "uPP0DIklOhZjGks3",
+                                       "name":  "Pranjal Roy \u003cpranjalroy9836@gmail.com\u003e",
+                                       "type":  "personal",
+                                       "icon":  null,
+                                       "description":  null,
+                                       "customTelemetryTags":  [
+
+                                                               ],
+                                       "creatorId":  "ee0f4fcf-e00c-4cac-9fcb-616378334633"
+                                   }
+                   }
+               ],
+    "versionMetadata":  {
+                            "name":  null,
+                            "description":  null
+                        }
+}

@@ -1,0 +1,15 @@
+# Local / editor artefacts
+.env
+.env.*
+*.key
+*.pem
+.DS_Store
+Thumbs.db
+
+# n8n local data
+.n8n/
+n8n-data/
+
+# Node
+node_modules/
+dist/

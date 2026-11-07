@@ -1,0 +1,38 @@
+Team: Tetraverse Capstone Team
+Date: 07 November 2026
+Attendees: Aritra, Tithi, Pranjal, Tiasha
+Duration: 35 minutes
+
+Aritra: Thanks everyone. Three things today: the demo date, the Telegram bot scope, and who owns the slide deck.
+
+Tithi: The faculty review is on 14 November, so we need a working demo by the 12th.
+
+Aritra: Agreed. Let's freeze feature scope tonight and spend the 11th and 12th only on testing. Decision: no new features after 10 November.
+
+Pranjal: The `.txt` upload path is working. Next is the AI extraction step.
+
+Aritra: Good. Pranjal, can you finish the AI agent extraction by 10 November?
+
+Pranjal: Yes, I'll have the agent returning summary, decisions, action items, owners and deadlines by the 10th.
+
+Tiasha: I'll prepare the Google Sheet with columns for task, owner, deadline, meeting date and status. I can do that by Sunday.
+
+Tithi: I'll write the demo script and record a backup walkthrough video. Target is the 11th.
+
+Aritra: Someone needs to test the bot with messy real transcripts, including one with no assigned owners.
+
+Tiasha: I can help with testing, but I'm not sure I can own the whole test pass. Let's decide that later.
+
+Aritra: Open question: do we store every meeting in one sheet or one sheet per team? We need to ask the mentors.
+
+Pranjal: Also unclear whether the Telegram summary should go to the group or only to the person who uploaded the transcript. We should confirm before the demo.
+
+Tithi: The deck — I think Aritra should own it, but we haven't confirmed.
+
+Aritra: Let's leave the deck owner open until tomorrow's standup. I'll ask in the group chat.
+
+Tithi: One more thing — can we flag tasks with no deadline? Several action items today don't have one.
+
+Pranjal: Yes, the AI output will mark missing owners and missing deadlines explicitly instead of guessing.
+
+Aritra: Great. Recap: scope frozen, demo on the 12th, Pranjal on AI extraction, Tiasha on the sheet, Tithi on the demo script and backup video. Deck owner and the sheet layout question stay open.
