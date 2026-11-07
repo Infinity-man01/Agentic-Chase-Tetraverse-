@@ -15,7 +15,7 @@ Users can send meeting transcripts through a Telegram bot and receive structured
 
 - **Transcript Input:** Accept meeting transcripts through Telegram messages and `.txt` files.
 - **AI-Powered Analysis:** Extract key decisions, action items, assigned owners, and deadlines.
-- **Task Tracking:** Automatically record action items in Google Sheets or Trello.
+- **Structured Storage:** Automatically record meetings, decisions, action items and open questions in Excel (`.xlsx`) files, one per table.
 - **Meeting Summaries:** Send formatted meeting summaries directly to the Telegram group.
 - **Unassigned Task Detection:** Identify tasks without assigned owners.
 - **Ambiguity Handling:** Flag missing deadlines, unclear responsibilities, and incomplete information.
@@ -27,7 +27,7 @@ Users can send meeting transcripts through a Telegram bot and receive structured
 | n8n | Workflow automation |
 | Telegram Bot API | User interaction and notifications |
 | AI / LLM | Meeting analysis and information extraction |
-| Google Sheets | Action item storage and tracking |
+| Excel (`.xlsx`) | Structured storage, one file per table |
 | JSON | Structured AI output and data exchange |
 
 ## 🔄 Workflow Architecture
@@ -37,7 +37,7 @@ Users can send meeting transcripts through a Telegram bot and receive structured
 3. An AI agent analyzes the conversation.
 4. Important decisions, action items, owners, and deadlines are extracted.
 5. Incomplete or ambiguous information is flagged.
-6. Action items are stored in Google Sheets.
+6. Decisions, action items and open questions are written to Excel files.
 7. A formatted meeting summary is sent back to the Telegram group.
 
 ## 🏗️ Project Structure
@@ -63,28 +63,37 @@ Meeting-to-Action-Bot/
 ## 🚀 Implementation Status
 
 - [x] Telegram bot setup (bot credential configured)
-- [x] n8n workflow configuration — Phases 1–2 (text and `.txt` intake)
-- [ ] AI-based transcript analysis (Phase 3)
-- [ ] Structured action item extraction (Phase 3)
-- [ ] Google Sheets integration (Phase 4)
-- [ ] Telegram summary generation (Phase 5)
-- [ ] Missing information and error handling (input-side done; extraction-side pending)
-- [ ] End-to-end testing
+- [x] n8n workflow configuration — Phases 1–6
+- [x] AI-based transcript analysis (Phase 3)
+- [x] Structured action item extraction (Phase 3)
+- [x] Excel storage, one `.xlsx` per table (Phase 5)
+- [x] Consolidated Telegram summary with message splitting (Phase 6)
+- [x] Missing information, storage and processing error handling (Phase 6)
+- [x] End-to-end testing (test execution `#53`, all writes verified)
 
-## 📦 Current Build (Phases 1–2)
+## 📦 Current Build (Phases 1–6)
 
 **Workflow:** `Rasamalai - Meeting-to-Action MVP` — **inactive, not published**
 
 Built in n8n 2.46.4, timezone `Asia/Kolkata`.
 
-- Telegram Trigger accepts messages and `.txt` documents.
+- Telegram Trigger accepts pasted text and `.txt` documents.
 - Every input is normalized to one transcript contract:
   `chat_id`, `user_id`, `message_id`, `source_type` (`text` | `txt`), `transcript`, `meeting_timestamp`.
-- Plain text and `.txt` uploads converge on the same `Transcript Processing` placeholder — the Phase 3 AI insertion point.
+- `AI Agent` (NVIDIA Nemotron + Structured Output Parser + Think Tool) returns
+  summary, decisions, action items and open questions as JSON.
+- `Validate AI Output` normalizes and validates that JSON: enums, owners, and
+  deadline resolution (absolute dates, weekdays, relative phrases, vague wording).
+- Storage writes four Excel files per meeting:
+  `<meeting_id>_Meetings.xlsx`, `_Decisions.xlsx`, `_ActionItems.xlsx`, `_OpenQuestions.xlsx`.
+- `Build Telegram Summary` verifies every write, then sends **one** consolidated
+  summary (split at 3800 characters for Telegram's length limit).
+- Storage failures are reported explicitly and are never presented as success.
 - Rejections and failures are handled deterministically with Telegram replies:
   empty message, unsupported media, bot commands, too-short text, non-`.txt` file,
-  download failure, unreadable or empty extracted text.
-- No AI and no Google Sheets yet, by design.
+  download failure, unreadable or empty extracted text, invalid AI output.
+- The AI Agent never sends Telegram messages and never writes files; those stay in
+  deterministic nodes.
 
 Exported workflow: [`workflows/meeting-to-action.json`](workflows/meeting-to-action.json)
 (credential references removed before publishing).
